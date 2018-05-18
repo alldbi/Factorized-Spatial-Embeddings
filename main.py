@@ -11,30 +11,13 @@ from matplotlib import cm
 
 # Parameter setting ****************************************************************************************************
 
-
-# number of channels in input samples
-n_input_ch = 3
-# mode of ru
-mode = "train"
-# mode = "test"
-
-#
-isTraining = True
-isBN = isTraining
-
-
-# display parameters
-
-display_step = 20
-
-# saving frequency
-
-save_freq = 500
-summary_freq = 20
-
+SAVE_FREQ = 500
+SUMMARY_FREQ = 20
+MODE = "test"
 BATCH_SIZE = 32
 DATA_DIRECTORY = '/media/lab320/0274E2F866ED37FC/dataset/CelebA/img_align_celeba'
 LANDMARK_N = 32
+DOWNSAMPLE_M = 4
 DIVERSITY = 500.
 ALIGN = 1.
 LEARNING_RATE = 1.e-4
@@ -44,7 +27,8 @@ WEIGHT_DECAY = 0.0005
 SCALE_SIZE = 146
 CROP_SIZE = 146
 MAX_EPOCH = 200
-OUTPUT_DIR = './model'
+OUTPUT_DIR = './OUTPUT'
+CHECKPOINT = './backup/model/'
 
 
 
@@ -55,6 +39,7 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="Factorized Spatial Embeddings")
+    parser.add_argument("--mode", default=MODE, choices=["train", "test"])
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
                         help="Number of images sent to the network in one step.")
     parser.add_argument("--input-dir", type=str, default=DATA_DIRECTORY,
@@ -65,6 +50,8 @@ def get_arguments():
                         help="Momentum component of the optimiser.")
     parser.add_argument("--K", type=int, default=LANDMARK_N,
                         help="Number of landmarks.")
+    parser.add_argument("--M", type=int, default=DOWNSAMPLE_M,
+                        help="Downsampling value of the diversity loss.")
     parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
                         help="Regularisation parameter for L2-loss.")
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
@@ -78,17 +65,23 @@ def get_arguments():
     parser.add_argument("--crop_size", type=int, default=CROP_SIZE,
                         help="CROP images to this size")
     parser.add_argument("--max_epochs", type=int, default=MAX_EPOCH,
-                        help="number of training epochs")
-    parser.add_argument("--checkpoint", default=None,
+                        help="Number of training epochs")
+    parser.add_argument("--checkpoint", default=CHECKPOINT,
                         help="Directory with checkpoint to resume training from or use for testing")
-    parser.add_argument("--output_dir", default=OUTPUT_DIR, help="where to put output files")
-
+    parser.add_argument("--output_dir", default=OUTPUT_DIR,
+                        help="Where to put output files")
+    parser.add_argument("--summary_freq", type=int, default=SUMMARY_FREQ,
+                        help="Update summaries every summary_freq steps")
+    parser.add_argument("--save_freq", type=int, default=SAVE_FREQ, help="Save model every save_freq steps")
     return parser.parse_args()
 
 
-
-
 def landmark_colors(n_landmarks):
+    """Compute landmark colors.
+
+    Returns:
+      An array of RGB values.
+    """
     cmap = cm.get_cmap('hsv')
     landmark_color = []
     landmark_color.append((0., 0., 0.))
@@ -98,16 +91,17 @@ def landmark_colors(n_landmarks):
     return landmark_color
 
 
-
-# if os.path.isdir(log_dir):
-#     shutil.rmtree(log_dir)
-
 # Collections definition
 Examples = collections.namedtuple("Examples",
                                   "paths, images, images_deformed, deformation, count, steps_per_epoch, shape")
 Model = collections.namedtuple("Model", "pos_loss, neg_loss, distance")
 
 def weight_decay():
+    """Compute weight decay loss.
+
+    Returns:
+      Weight decay loss.
+    """
     costs = []
     for var in tf.trainable_variables():
         if var.op.name.find('filter')>0:
@@ -123,40 +117,25 @@ def conv(batch_input, out_channels, stride=1):
         return conv
 
 
-def dense(input, n_output):
-    with tf.variable_scope("dense"):
-        weights = tf.get_variable("weights", [input.get_shape()[1], n_output], dtype=tf.float32,
-                                  initializer=tf.random_normal_initializer(0, 0.02))
-        biases = tf.get_variable("biases", shape=n_output, dtype=tf.float32,
-                                 initializer=tf.random_normal_initializer(0, 0.01))
-    return tf.matmul(input, weights) + biases
+def save_images(fetches, args, step=None):
+    image_dir = os.path.join(args.output_dir, "images")
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
 
-
-def _normalize(x):
-    w = tf.shape(x)[1]
-    _max = tf.reduce_max(x, axis=[1, 2, 3])
-    _max = tf.reshape(_max, [-1, 1, 1, 1])
-    _max = tf.tile(_max, [1, w, w, 1])
-    _min = tf.reduce_min(x, axis=[1, 2, 3])
-    _min = tf.reshape(_min, [-1, 1, 1, 1])
-    _min = tf.tile(_min, [1, w, w, 1])
-    x = (x - _min) / (_max - _min + 1e-10)
-    return x
-
-
-def batchnorm(input):
-    with tf.variable_scope("batchnorm"):
-        # this block looks like it has 3 inputs on the graph unless we do this
-        input = tf.identity(input)
-
-        channels = input.get_shape()[3]
-        offset = tf.get_variable("offset", [channels], dtype=tf.float32, initializer=tf.zeros_initializer())
-        scale = tf.get_variable("scale", [channels], dtype=tf.float32,
-                                initializer=tf.random_normal_initializer(1.0, 0.02))
-        mean, variance = tf.nn.moments(input, axes=[0, 1, 2], keep_dims=False)
-        variance_epsilon = 1e-5
-        normalized = tf.nn.batch_normalization(input, mean, variance, offset, scale, variance_epsilon=variance_epsilon)
-        return normalized
+    filesets = []
+    for i, in_path in enumerate(fetches["paths"]):
+        name, _ = os.path.splitext(os.path.basename(in_path.decode("utf8")))
+        fileset = {"name": name, "step": step}
+        filename = name + "-" + "outputs" + ".png"
+        if step is not None:
+            filename = "%08d-%s" % (step, filename)
+        fileset["outputs"] = filename
+        out_path = os.path.join(image_dir, filename)
+        contents = fetches["outputs"][i]
+        with open(out_path, "wb") as f:
+            f.write(contents)
+        filesets.append(fileset)
+    return filesets
 
 
 def preprocess(image):
@@ -164,16 +143,20 @@ def preprocess(image):
         # [0, 1] => [-1, 1]
         return image * 2 - 1
 
-
 def deprocess(image):
     with tf.name_scope("deprocess"):
         # [-1, 1] => [0, 1]
         return (image + 1) / 2
 
-
-
-
 def load_examples(args):
+    """Load all images in the input_dir.
+
+    Returns:
+      Examples.paths : batch of path of images,
+      Examples.images : batch of images,
+      Examples.images_deformed : batch of deformed images,
+      Examples.deformation : batch of deformation parameters,
+    """
     if args.input_dir is None or not os.path.exists(args.input_dir):
         raise Exception("input_dir does not exist")
 
@@ -196,16 +179,16 @@ def load_examples(args):
         input_paths = sorted(input_paths)
 
     with tf.name_scope("load_images"):
-        path_queue = tf.train.string_input_producer(input_paths, shuffle=mode == "train")
+        path_queue = tf.train.string_input_producer(input_paths, shuffle= args.mode == "train")
         reader = tf.WholeFileReader()
         paths, contents = reader.read(path_queue)
         raw_input = decode(contents)
         raw_input = tf.image.convert_image_dtype(raw_input, dtype=tf.float32)
-        assertion = tf.assert_equal(tf.shape(raw_input)[2], n_input_ch, message="image does not have required channels")
+        assertion = tf.assert_equal(tf.shape(raw_input)[2], 3, message="image does not have required channels")
         with tf.control_dependencies([assertion]):
             raw_input = tf.identity(raw_input)
 
-        raw_input.set_shape([None, None, n_input_ch])  # was 3
+        raw_input.set_shape([None, None, 3])
 
         images = preprocess(raw_input)
 
@@ -226,7 +209,8 @@ def load_examples(args):
 
     with tf.name_scope("images"):
         input_images = transform(images)
-        input_images, _ = image_warping2(input_images, w=0.0)
+        if args.mode=="train":
+            input_images, _ = image_warping2(input_images, w=0.0)
         deformed_images, deformation = image_warping2(input_images, w=0.1)
         deformation = tf.squeeze(deformation)
 
@@ -252,42 +236,41 @@ def load_examples(args):
         shape=raw_input.get_shape()
     )
 
-def CNN_tower(inputs, n_landmarks):
+def CNN_tower(inputs, n_landmarks, isTrain):
 
     n_filters = [20, 48, 64, 80, 256, n_landmarks]
-
     with tf.variable_scope("layer_1"):
         x = conv(inputs, n_filters[0])
         x = tf.contrib.layers.batch_norm(x, updates_collections=None, decay=0.9, center=True,
                                                      scale=True,
-                                                     activation_fn=tf.nn.relu, is_training=isBN)
+                                                     activation_fn=tf.nn.relu, is_training=isTrain)
         # only the first layer has a 2x2 maxpooling
         x = tf.layers.max_pooling2d(inputs=x, pool_size=[2, 2], strides=2)
     with tf.variable_scope("layer_2"):
         x = conv(x, n_filters[1])
         x = tf.contrib.layers.batch_norm(x, updates_collections=None, decay=0.9, center=True,
                                          scale=True,
-                                         activation_fn=tf.nn.relu, is_training=isBN)
+                                         activation_fn=tf.nn.relu, is_training=isTrain)
     with tf.variable_scope("layer_3"):
         x = conv(x, n_filters[2])
         x = tf.contrib.layers.batch_norm(x, updates_collections=None, decay=0.9, center=True,
                                          scale=True,
-                                         activation_fn=tf.nn.relu, is_training=isBN)
+                                         activation_fn=tf.nn.relu, is_training=isTrain)
     with tf.variable_scope("layer_4"):
         x = conv(x, n_filters[3])
         x = tf.contrib.layers.batch_norm(x, updates_collections=None, decay=0.9, center=True,
                                          scale=True,
-                                          activation_fn=tf.nn.relu, is_training=isBN)
+                                          activation_fn=tf.nn.relu, is_training=isTrain)
     with tf.variable_scope("layer_5"):
         x = conv(x, n_filters[4])
         x = tf.contrib.layers.batch_norm(x, updates_collections=None, decay=0.9, center=True,
                                          scale=True,
-                                         activation_fn=tf.nn.relu, is_training=isBN)
+                                         activation_fn=tf.nn.relu, is_training=isTrain)
     with tf.variable_scope("layer_6"):
         x = conv(x, n_filters[5])
         x = tf.contrib.layers.batch_norm(x, updates_collections=None, decay=0.9, center=True,
                                          scale=True,
-                                         activation_fn=tf.nn.relu, is_training=isBN)
+                                         activation_fn=tf.nn.relu, is_training=isTrain)
 
     return x
 
@@ -411,10 +394,10 @@ def main():
 
 
     with tf.variable_scope("cnn_tower"):
-        predA = CNN_tower(examples.images, n_landmarks=args.K)
+        predA = CNN_tower(examples.images, n_landmarks=args.K, isTrain=args.mode == "train")
 
     with tf.variable_scope("cnn_tower", reuse=True):
-        predB = CNN_tower(examples.images_deformed, n_landmarks=args.K)
+        predB = CNN_tower(examples.images_deformed, n_landmarks=args.K, isTrain=args.mode == "train")
 
 
     # apply a spatial softmax to obtain K probability maps
@@ -471,8 +454,8 @@ def main():
         pred_max_sum = tf.reduce_mean(pred_max_sum)
         return pred_max_sum
 
-    diversityLoss_predA = diversity_loss(predA, n_landmark=args.K, pool_size=4)
-    diversityLoss_predB = diversity_loss(predB, n_landmark=args.K, pool_size=4)
+    diversityLoss_predA = diversity_loss(predA, n_landmark=args.K, pool_size=args.M)
+    diversityLoss_predB = diversity_loss(predB, n_landmark=args.K, pool_size=args.M)
     div_loss = diversityLoss_predA + diversityLoss_predB
 
     # compute the align loss
@@ -525,6 +508,14 @@ def main():
     tf.summary.scalar("loss_diversity", div_loss)
     tf.summary.scalar("loss_decay", decay_loss)
 
+    output_images = tf.image.convert_image_dtype(input_images_landmark, dtype=tf.uint8, saturate=True)
+    with tf.name_scope("encode_images"):
+        display_fetches = {
+            "paths": examples.paths,
+            "outputs": tf.map_fn(tf.image.encode_png, output_images, dtype=tf.string, name="input_pngs"),
+        }
+
+
     saver = tf.train.Saver(max_to_keep=1)
 
     sv = tf.train.Supervisor(logdir=os.path.join(os.path.join(args.output_dir, 'logs')), save_summaries_secs=0, saver=None)
@@ -545,10 +536,8 @@ def main():
             checkpoint = tf.train.latest_checkpoint(args.checkpoint)
             saver.restore(sess, checkpoint)
 
-
-        exit()
-
-        if isTraining:
+        if args.mode == "train":
+            # training
             for step in range(max_steps):
                 def should(freq):
                     return freq > 0 and ((step + 1) % freq == 0 or step == max_steps - 1)
@@ -566,16 +555,13 @@ def main():
 
                 }
 
-                if should(freq=summary_freq):
+                if should(freq=args.summary_freq):
                     fetches["summary"] = sv.summary_op
+
                 results = sess.run(fetches)
 
-
-                if should(freq=summary_freq):
-                    # print("recording summary")
+                if should(freq=args.summary_freq):
                     sv.summary_writer.add_summary(results["summary"], results["global_step"])
-                    # print results["loss"]
-                if should(freq=display_step):
                     # global_step will have the correct step count if we resume from a checkpoint
                     train_epoch = math.ceil(results["global_step"] / examples.steps_per_epoch)
                     train_step = (results["global_step"] - 1) % examples.steps_per_epoch + 1
@@ -588,9 +574,19 @@ def main():
                     print ("loss_decay", results["decay_loss"])
                     print ("------------------------------")
 
-                if should(freq=save_freq):
+                if should(freq=args.save_freq):
                     print("saving model")
                     saver.save(sess, os.path.join(args.output_dir, "model"), global_step=sv.global_step)
+        elif args.mode=="test":
+            # testing
+            start = time.time()
+            max_steps = min(examples.steps_per_epoch, max_steps)
+            for step in range(max_steps):
+                results = sess.run(display_fetches)
+                filesets = save_images(results, args)
+                for i, f in enumerate(filesets):
+                    print("evaluated image", f["name"])
+            print("rate", (time.time() - start) / max_steps)
 
 
 if __name__ == '__main__':
