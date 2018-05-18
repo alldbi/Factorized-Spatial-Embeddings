@@ -594,7 +594,7 @@ def main():
 
                 if should(freq=save_freq):
                     print("saving model")
-                    saver.save(sess, os.path.join(save_dir, "model"), global_step=sv.global_step)
+                    saver.save(sess, os.path.join(args.output_dir, "model"), global_step=sv.global_step)
 
 
 if __name__ == '__main__':
