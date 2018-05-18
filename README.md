@@ -21,11 +21,15 @@ cd Factorized-Spatial-Embeddings
 # train the model 
 python main.py \
   --mode train \
-  --input_dir (directory containing CelebA dataset)
+  --input_dir (directory containing CelebA dataset) \ 
+  --K 8  \ #number of landmarks to be learned
 
 # test the model
 python main.py \
   --mode test \
   --input_dir (directory containing testing images)
+  --checkpoint (address of the trained model, which is /OUTPUT as default)
+  --K 8
+  
 
 
