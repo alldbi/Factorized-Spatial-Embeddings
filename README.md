@@ -3,7 +3,7 @@
 Tensorflow implementation of [Unsupervised learning of object landmarks by factorized spatial embeddings](http://www.robots.ox.ac.uk/~vedaldi//assets/pubs/thewlis17unsupervised.pdf) by Thewlis el al. for unsupervised landmark detection. 
 
 ### Sample results
-Test results on LFW with 8 landmarks (K=8, M=4) 
+Test results on LFW with 8 landmarks (K=8, M=4), trained on CelebA dataset for 2 epochs.
 ![](https://github.com/alldbi/Factorized-Spatial-Embeddings/blob/master/test_samples/test-K8M4.png)
 
 ## Setup
