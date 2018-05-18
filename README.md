@@ -13,7 +13,7 @@ Test results on LFW with 8 landmarks (K=16, M=4), trained on CelebA dataset for 
 - Tensorflow 1.4
 
 ### Getting Started
-
+First download the [CelebA dataset](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) or the [shoes dataset](http://vision.cs.utexas.edu/projects/finegrained/utzap50k/), extract images and use them to train the model.  
 ```sh
 # clone this repo
 https://github.com/alldbi/Factorized-Spatial-Embeddings.git
