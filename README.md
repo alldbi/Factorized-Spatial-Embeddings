@@ -7,4 +7,10 @@ Tensorflow implementation of [Unsupervised learning of object landmarks by facto
 ### Prerequisites
 - Tensorflow 1.4
 
+### Getting Started
+
+```sh
+# clone this repo
+
+
 
