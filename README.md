@@ -11,6 +11,16 @@ Tensorflow implementation of [Unsupervised learning of object landmarks by facto
 
 ```sh
 # clone this repo
+https://github.com/alldbi/Factorized-Spatial-Embeddings.git
+cd Factorized-Spatial-Embeddings
+# train the model 
+python main.py \
+  --mode train \
+  --input_dir (directory containing CelebA dataset)
 
+# test the model
+python main.py \
+  --mode test \
+  --input_dir (directory containing testing images)
 
 
