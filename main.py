@@ -79,7 +79,7 @@ def get_arguments():
                         help="CROP images to this size")
     parser.add_argument("--max_epochs", type=int, default=MAX_EPOCH,
                         help="number of training epochs")
-    parser.add_argument("--checkpoint", default=OUTPUT_DIR,
+    parser.add_argument("--checkpoint", default=None,
                         help="Directory with checkpoint to resume training from or use for testing")
     parser.add_argument("--output_dir", default=OUTPUT_DIR, help="where to put output files")
 
@@ -540,14 +540,10 @@ def main():
 
         print("parameter_count =", sess.run(parameter_count))
 
-        isLoadModel = True
-        if isLoadModel:
+        if args.checkpoint is not None:
             print ("loading from checkpoint...")
             checkpoint = tf.train.latest_checkpoint(args.checkpoint)
             saver.restore(sess, checkpoint)
-            #    print "^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
-            # for i in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-            #     print i
 
 
         exit()
