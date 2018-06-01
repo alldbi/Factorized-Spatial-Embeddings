@@ -40,11 +40,11 @@ def get_arguments():
     """
     parser = argparse.ArgumentParser(description="Factorized Spatial Embeddings")
     parser.add_argument("--mode", default=MODE, choices=["train", "test"])
-    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,
+    parser.add_argument("--batch_size", type=int, default=BATCH_SIZE,
                         help="Number of images sent to the network in one step.")
-    parser.add_argument("--input-dir", type=str, default=DATA_DIRECTORY,
+    parser.add_argument("--input_dir", type=str, default=DATA_DIRECTORY,
                         help="Path to the directory containing the training or testing images.")
-    parser.add_argument("--learning-rate", type=float, default=LEARNING_RATE,
+    parser.add_argument("--learning_rate", type=float, default=LEARNING_RATE,
                         help="Learning rate for adam.")
     parser.add_argument("--beta1", type=float, default=MOMENTUM,
                         help="Momentum component of the optimiser.")
@@ -52,13 +52,13 @@ def get_arguments():
                         help="Number of landmarks.")
     parser.add_argument("--M", type=int, default=DOWNSAMPLE_M,
                         help="Downsampling value of the diversity loss.")
-    parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY,
+    parser.add_argument("--weight_decay", type=float, default=WEIGHT_DECAY,
                         help="Regularisation parameter for L2-loss.")
     parser.add_argument("--random-seed", type=int, default=RANDOM_SEED,
                         help="Random seed to have reproducible results.")
-    parser.add_argument("--diversity-weight", type=float, default=DIVERSITY,
+    parser.add_argument("--diversity_weight", type=float, default=DIVERSITY,
                         help="Weight on diversity loss.")
-    parser.add_argument("--align-weight", type=float, default=ALIGN,
+    parser.add_argument("--align_weight", type=float, default=ALIGN,
                         help="Weight on align loss.")
     parser.add_argument("--scale_size", type=int, default=SCALE_SIZE,
                         help="Scale images to this size before cropping to CROP_SIZE")
