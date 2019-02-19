@@ -5,7 +5,7 @@ Tensorflow implementation of [Unsupervised learning of object landmarks by facto
 ### Sample results
 Test results on LFW with 8 landmarks (K=8, M=4), trained on CelebA dataset for 2 epochs.
 ![](https://github.com/alldbi/Factorized-Spatial-Embeddings/blob/master/test_samples/test-K8M4.png)
-Test results on LFW with 8 landmarks (K=16, M=4), trained on CelebA dataset for 2 epochs.
+Test results on LFW with 16 landmarks (K=16, M=4), trained on CelebA dataset for 2 epochs.
 ![](https://github.com/alldbi/Factorized-Spatial-Embeddings/blob/master/test_samples/K16M4.png)
 ## Setup
 
